@@ -11,12 +11,13 @@ find_package(glm)
 find_package(CGAL QUIET COMPONENTS Core)
 
 add_library(gfp_cgal MODULE
-  cgal_nodes.cpp
-  isolines.cpp
-  linesimp.cpp
-  tinsimp.cpp
+  src/cgal_nodes.cpp
+  src/isolines.cpp
+  src/linesimp.cpp
+  src/tinsimp.cpp
   plugin.cpp
 )
+target_include_directories( gfp_cgal PRIVATE src )
 target_link_libraries( gfp_cgal
   geoflow-core
   LASlib
