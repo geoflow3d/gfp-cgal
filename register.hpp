@@ -22,6 +22,9 @@ void register_nodes(geoflow::NodeRegister& node_register) {
     node_register.register_node<LineHeightNode>("LineHeight");
     node_register.register_node<LineHeightCDTNode>("LineHeightCDT");
     node_register.register_node<SimplifyLinesBufferNode>("SimplifyLinesBuffer");
+    node_register.register_node<CDTAddConstraintNode>("CDTAddConstraint");
+    node_register.register_node<CDT2TrianglesNode>("CDT2Triangles");
+    node_register.register_node<OBJWriterNode>("OBJWriter");
 }
 
 namespace geoflow::nodes::las {

@@ -84,26 +84,7 @@ void CDTNode::process(){
   }
 
   std::cout << "Completed CDT with " << cdt.number_of_faces() << " triangles...\n";
-  // assert(cdt.is_valid());
-  TriangleCollection triangles;
-  if (create_triangles) {
-    for (CDT::Finite_faces_iterator fit = cdt.finite_faces_begin();
-      fit != cdt.finite_faces_end();
-      ++fit) {
-      auto& p0 = fit->vertex(0)->point();
-      auto& p1 = fit->vertex(1)->point();
-      auto& p2 = fit->vertex(2)->point();
-      triangles.push_back({
-        to_arr3f<Point>(p0),
-        to_arr3f<Point>(p1),
-        to_arr3f<Point>(p2)
-        });
-    }
-    cdt.clear();
-  }
-
   output("cgal_cdt").set(cdt);
-  output("triangles").set(triangles);
 }
 
 void DTNode::process() {
@@ -1063,5 +1044,83 @@ void SimplifyLinesBufferNode::process() {
 
   }
   output("polygons_simp").set(polygonssimp);
+}
+
+void CDTAddConstraintNode::process() {
+  auto cdt = input("cgal_cdt").get<CDT>();
+  auto lines_vec = vector_input("lines");
+
+  for (int i = 0; i < lines_vec.size(); i++) {
+    auto line = lines_vec.get<LineString>(i);
+    std::vector<Point> cgal_points;
+    cgal_points.reserve(line.size());
+    for (auto& p : line) {
+      cgal_points.push_back(Point(
+        p[0] + (*manager.data_offset)[0], 
+        p[1] + (*manager.data_offset)[1],
+        p[2] + (*manager.data_offset)[2]));
+    }
+    cdt.insert_constraint(cgal_points.begin(), cgal_points.end());
+  }
+  std::cout << "Added lines to CDT\n";
+
+  output("cgal_cdt").set(cdt);
+}
+
+void CDT2TrianglesNode::process() {
+  auto cdt = input("cgal_cdt").get<CDT>();
+
+  TriangleCollection triangles;
+  for (CDT::Finite_faces_iterator fit = cdt.finite_faces_begin();
+    fit != cdt.finite_faces_end();
+    ++fit) {
+    auto& p0 = fit->vertex(0)->point();
+    auto& p1 = fit->vertex(1)->point();
+    auto& p2 = fit->vertex(2)->point();
+    triangles.push_back({
+      to_arr3f<Point>(p0),
+      to_arr3f<Point>(p1),
+      to_arr3f<Point>(p2)
+      });
+  }
+  cdt.clear();
+
+  output("triangles").set(triangles);
+}
+
+void OBJWriterNode::process() {
+  //auto& t_in = vector_input("triangles");
+  //std::vector<Triangle> triangles;
+  //for (size_t i = 0; i < t_in.size(); ++i) {
+  //  triangles.push_back(t_in.get<Triangle>(i));
+  //}
+
+  auto& triangles = input("triangles").get<TriangleCollection>();
+
+  std::map<arr3f, size_t> vertex_map;
+  std::vector<arr3f> vertex_vec;
+  {
+    size_t v_cntr = 1;
+    std::set<arr3f> vertex_set;
+    for (auto& triangle : triangles) {
+      for (auto& vertex : triangle) {
+        auto[it, did_insert] = vertex_set.insert(vertex);
+        if (did_insert) {
+          vertex_map[vertex] = v_cntr++;
+          vertex_vec.push_back(vertex);
+        }
+      }
+    }
+  }
+  std::ofstream ofs;
+  ofs.open(filepath);
+  ofs << std::fixed << std::setprecision(3);
+  for (auto& v : vertex_vec) {
+    ofs << "v " << v[0] << " " << v[1] << " " << v[2] << std::endl;
+  }
+  for (auto& triangle : triangles) {
+    ofs << "f " << vertex_map[triangle[0]] << " " << vertex_map[triangle[1]] << " " << vertex_map[triangle[2]] << std::endl;
+  }
+  ofs.close();
 }
 }

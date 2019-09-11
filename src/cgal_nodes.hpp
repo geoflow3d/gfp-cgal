@@ -14,9 +14,6 @@ namespace geoflow::nodes::cgal {
     void init() {
       add_input("geometries", { typeid(PointCollection), typeid(LineStringCollection) });
       add_output("cgal_cdt", typeid(CDT));
-      add_output("triangles", typeid(TriangleCollection));
-
-      add_param("create_triangles", ParamBool(create_triangles, "Create triangles"));
     }
     void process();
   };
@@ -315,6 +312,40 @@ namespace geoflow::nodes::cgal {
       add_output("polygons_simp", typeid(LinearRingCollection));
 
       add_param("threshold", ParamBoundedFloat(threshold, 0, 100, "Threshold"));
+    }
+    void process();
+  };
+
+  class CDTAddConstraintNode:public Node {
+  public:
+    using Node::Node;
+    void init() {
+      add_input("cgal_cdt", typeid(CDT));
+      add_vector_input("lines", typeid(LineString));
+      add_output("cgal_cdt", typeid(CDT));
+    }
+    void process();
+  };
+
+  class CDT2TrianglesNode:public Node {
+  public:
+    using Node::Node;
+    void init() {
+      add_input("cgal_cdt", typeid(CDT));
+      add_output("triangles", typeid(TriangleCollection));
+    }
+    void process();
+  };
+
+  class OBJWriterNode:public Node {
+    std::string filepath;
+  public:
+    using Node::Node;
+    void init() {
+      //add_vector_input("triangles", { typeid(Triangle) });
+      add_input("triangles", { typeid(TriangleCollection) });
+
+      add_param("filepath", ParamPath(filepath, "File path"));
     }
     void process();
   };
