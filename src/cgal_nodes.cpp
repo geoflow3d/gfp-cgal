@@ -1123,4 +1123,40 @@ void OBJWriterNode::process() {
   }
   ofs.close();
 }
+
+void VecOBJWriterNode::process() {
+  auto& triangles = vector_input("triangles");
+
+
+  std::map<arr3f, size_t> vertex_map;
+  std::vector<arr3f> vertex_vec;
+  {
+    size_t v_cntr = 1;
+    std::set<arr3f> vertex_set;
+    for (size_t j=0; j<triangles.size(); ++j) {
+      for (auto& triangle : triangles.get<TriangleCollection>(j)) {
+        for (auto& vertex : triangle) {
+          auto[it, did_insert] = vertex_set.insert(vertex);
+          if (did_insert) {
+            vertex_map[vertex] = v_cntr++;
+            vertex_vec.push_back(vertex);
+          }
+        }
+      }
+    }
+  }
+  std::ofstream ofs;
+  ofs.open(filepath);
+  ofs << std::fixed << std::setprecision(3);
+  for (auto& v : vertex_vec) {
+    ofs << "v " << v[0] << " " << v[1] << " " << v[2] << "\n";
+  }
+  for (size_t j=0; j<triangles.size(); ++j) {
+    ofs << "o " << j << "\n";
+    for (auto& triangle : triangles.get<TriangleCollection>(j)) {
+      ofs << "f " << vertex_map[triangle[0]] << " " << vertex_map[triangle[1]] << " " << vertex_map[triangle[2]] << "\n";
+    }
+  }
+  ofs.close();
+}
 }

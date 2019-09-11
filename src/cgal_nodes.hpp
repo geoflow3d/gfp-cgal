@@ -342,8 +342,19 @@ namespace geoflow::nodes::cgal {
   public:
     using Node::Node;
     void init() {
-      //add_vector_input("triangles", { typeid(Triangle) });
-      add_input("triangles", { typeid(TriangleCollection) });
+      add_input("triangles", typeid(TriangleCollection));
+
+      add_param("filepath", ParamPath(filepath, "File path"));
+    }
+    void process();
+  };
+
+  class VecOBJWriterNode:public Node {
+    std::string filepath;
+  public:
+    using Node::Node;
+    void init() {
+      add_vector_input("triangles", typeid(TriangleCollection));
 
       add_param("filepath", ParamPath(filepath, "File path"));
     }

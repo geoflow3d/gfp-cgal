@@ -25,6 +25,7 @@ void register_nodes(geoflow::NodeRegister& node_register) {
     node_register.register_node<CDTAddConstraintNode>("CDTAddConstraint");
     node_register.register_node<CDT2TrianglesNode>("CDT2Triangles");
     node_register.register_node<OBJWriterNode>("OBJWriter");
+    node_register.register_node<VecOBJWriterNode>("OBJVecWriter");
 }
 
 namespace geoflow::nodes::las {
