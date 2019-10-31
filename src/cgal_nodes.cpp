@@ -330,7 +330,7 @@ void DensifyNode::process(){
   }
 }
 
-void build_initial_tin(tinsimp::CDT& cdt, geoflow::Box& bbox){ 
+void build_initial_tin(tinsimp::CDT& cdt, const geoflow::Box& bbox){ 
   float min_x = bbox.min()[0]-1;
   float min_y = bbox.min()[1]-1;
   float max_x = bbox.max()[0]+1;
@@ -346,7 +346,7 @@ void build_initial_tin(tinsimp::CDT& cdt, geoflow::Box& bbox){
   cdt.insert(initial_points.begin(), initial_points.end());
 }
 
-void delete_initial_tin(tinsimp::CDT& cdt, geoflow::Box& bbox) {
+void delete_initial_tin(tinsimp::CDT& cdt, const geoflow::Box& bbox) {
   float min_x = bbox.min()[0] - 1;
   float min_y = bbox.min()[1] - 1;
   float max_x = bbox.max()[0] + 1;
