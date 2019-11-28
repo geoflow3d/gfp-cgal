@@ -1149,7 +1149,10 @@ void VecOBJWriterNode::process() {
   ofs.open(filepath);
   ofs << std::fixed << std::setprecision(3);
   for (auto& v : vertex_vec) {
-    ofs << "v " << v[0]+(*manager.data_offset)[0] << " " << v[1]+(*manager.data_offset)[1] << " " << v[2]+(*manager.data_offset)[2] << "\n";
+    if (no_offset)
+      ofs << "v " << v[0] << " " << v[1] << " " << v[2] << "\n";
+    else
+      ofs << "v " << v[0]+(*manager.data_offset)[0] << " " << v[1]+(*manager.data_offset)[1] << " " << v[2]+(*manager.data_offset)[2] << "\n";
   }
   for (size_t j=0; j<triangles.size(); ++j) {
     ofs << "o " << j << "\n";

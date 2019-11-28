@@ -3,7 +3,7 @@
 
 #include <geoflow/geoflow.hpp>
 
-#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Cartesian.h>
 
 namespace linesimp {
 
@@ -15,7 +15,7 @@ typedef Heap::handle_type heap_handle;
 
 typedef std::list<std::pair<Point, heap_handle>> PointList;
 
-typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+typedef CGAL::Cartesian<double> K;
 typedef K::Point_2 Point2;
 typedef K::Line_2 Line;
 

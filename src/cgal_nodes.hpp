@@ -351,12 +351,14 @@ namespace geoflow::nodes::cgal {
 
   class VecOBJWriterNode:public Node {
     std::string filepath;
+    bool no_offset = false;
   public:
     using Node::Node;
     void init() {
       add_vector_input("triangles", typeid(TriangleCollection));
 
       add_param("filepath", ParamPath(filepath, "File path"));
+      add_param("no_offset", ParamBool(no_offset, "Do not apply global offset"));
     }
     void process();
   };
