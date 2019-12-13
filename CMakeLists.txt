@@ -25,6 +25,7 @@ target_link_libraries( gfp_cgal
 )
 set_target_properties(gfp_cgal PROPERTIES CXX_STANDARD 17)
 if (MSVC)
+  add_definitions(-DNOMINMAX)
   target_compile_options(gfp_cgal PRIVATE "/Zc:__cplusplus")
 endif()
 
