@@ -1198,5 +1198,286 @@ void CDT2TrianglesNode::process()
 
   output("triangles").set(triangles);
 }
+//----------for CGAL ALphaShape boundary ---------------Teng//
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+typedef K::FT                                                FT;
+typedef K::Point_2 Point_2;
+typedef std::vector<Point_2> Points;
+typedef K::Segment_2                                         Segment_2;
+typedef CGAL::Alpha_shape_vertex_base_2<K>                   Vb;
+typedef CGAL::Alpha_shape_face_base_2<K>                     Fb;
+typedef CGAL::Triangulation_data_structure_2<Vb, Fb>          Tds;
+typedef CGAL::Delaunay_triangulation_2<K, Tds>                Triangulation_2;
+typedef CGAL::Alpha_shape_2<Triangulation_2>                 Alpha_shape_2;
+typedef Alpha_shape_2::Alpha_shape_edges_iterator            Alpha_shape_edges_iterator;
+
+//---------Ravi's method ------------------------//
+//typedef CGAL::Triangulation_data_structure_2<Vb, Fb>          Tds;
+//typedef CGAL::Delaunay_triangulation_2<Gt, Tds>               Triangulation_2;
+//typedef CGAL::Alpha_shape_2<Triangulation_2>                 Alpha_shape_2;
+typedef Alpha_shape_2::Vertex_handle                        Vertex_handle;
+typedef Alpha_shape_2::Edge                                 Edge;
+typedef Alpha_shape_2::Face_handle                          Face_handle;
+typedef Alpha_shape_2::Vertex_circulator                    Vertex_circulator;
+typedef Alpha_shape_2::Edge_circulator                      Edge_circulator;
+typedef Triangulation_2::Point                                  TPoint;
+
+template <class OutputIterator>
+void alpha_edges(const Alpha_shape_2& A, OutputIterator out)
+{
+  Alpha_shape_edges_iterator it = A.alpha_shape_edges_begin(),
+    end = A.alpha_shape_edges_end();
+  for (; it != end; ++it)
+    *out++ = A.segment(*it);
+}
+template <class OutputIterator>
+bool file_input(OutputIterator out)
+{
+  std::ifstream is("./data/fin", std::ios::in);
+  if (is.fail())
+  {
+    std::cerr << "unable to open file for input" << std::endl;
+    return false;
+  }
+  int n;
+  is >> n;
+  std::cout << "Reading " << n << " points from file" << std::endl;
+  std::copy_n(std::istream_iterator<Point>(is), n, out);
+  return true;
+}
+
+class AlphaShapeRegionGrower {
+  Alpha_shape_2 &A;
+  enum Mode {
+    ALPHA, // stop at alpha boundary
+    EXTERIOR // stop at faces labels as exterior
+  };
+  int label_cnt; // label==-1 means exterior, -2 mean never visiter, 0+ means a regular region
+public:
+  std::unordered_map<Face_handle, int> face_map;
+  std::unordered_map<int, Vertex_handle> region_map; //label: (boundary vertex)
+  AlphaShapeRegionGrower(Alpha_shape_2& as) : A(as), label_cnt(0) {};
+
+  void grow() {
+    std::stack<Face_handle> seeds;
+    for (auto fh = A.all_faces_begin(); fh != A.all_faces_end(); ++fh) {
+      seeds.push(fh);
+      face_map[fh] = -2;
+    }
+    auto inf_face = A.infinite_face();
+    face_map[inf_face] = -1;
+    grow_region(inf_face, ALPHA); // this sets label of exterior faces to -1
+    while (!seeds.empty()) {
+      auto fh = seeds.top(); seeds.pop();
+      if (face_map[fh] == -2) {
+        face_map[fh] = label_cnt;
+        grow_region(fh, EXTERIOR);
+        ++label_cnt;
+      }
+    }
+  }
+  void grow_region(Face_handle face_handle, Mode mode) {
+    std::stack<Face_handle> candidates;
+    candidates.push(face_handle);
+
+    while (candidates.size() > 0) {
+      auto fh = candidates.top(); candidates.pop();
+      // check the 3 neighbors of this face
+      for (int i = 0; i < 3; ++i) {
+        auto e = std::make_pair(fh, i);
+        auto neighbor = fh->neighbor(i);
+
+        if (mode == ALPHA) {
+          // add neighbor if it is not on the ohter side of alpha boundary
+          // check if this neighbor hasn't been visited before
+          if (face_map[neighbor] == -2) {
+            auto edge_class = A.classify(e);
+            if (!(edge_class == Alpha_shape_2::REGULAR || edge_class == Alpha_shape_2::SINGULAR)) {
+              face_map[neighbor] = -1;
+              candidates.push(neighbor);
+            }
+          }
+        }
+        else if (mode == EXTERIOR) {
+          // check if this neighbor hasn't been visited before and is not exterior
+          auto edge_class = A.classify(e);
+          // if(face_map[neighbor] == -2 &&(edge_class!= Alpha_shape_2::REGULAR))
+          if (face_map[neighbor] == -2) {
+            face_map[neighbor] = label_cnt;
+            candidates.push(neighbor);
+            // if it is exterior, we store this boundary edge
+          }
+          else if (face_map[neighbor] == -1) {
+            if (region_map.find(label_cnt) == region_map.end()) { //check if label exists in region map
+              region_map[label_cnt] = fh->vertex(A.cw(i));
+            }
+          }
+        }
+
+      }
+    }
+  }
+};
+
+void CGALAlphaShapeR::process()
+{
+  std::cout << "CGAL AlphaShape starts..." << std::endl;
+  auto pc = input("points").get<PointCollection>();
+  float alpha = alpha_value;
+
+  //---------output -------------//
+
+  PointCollection ground_PC;
+
+  PointCollection edge_points, boundary_points;
+  LineStringCollection alpha_edges;
+  LinearRingCollection alpha_rings;
+  TriangleCollection alpha_triangles;
+  vec1i segment_ids, plane_idx;
+
+  float min_z = 9999999;
+  for (int i = 0; i < pc.size(); i++)
+  {
+    if (pc[i][2] < min_z)
+    {
+      min_z = pc[i][2];
+    }
+  }
+
+  Points pts, result; // for alpha
+  for (int i = 0; i < pc.size(); i++)
+  {
+    ground_PC.push_back({ pc[i][0],pc[i][1],min_z });
+    pts.push_back(Point_2(pc[i][0], pc[i][1]));
+  }
+  Alpha_shape_2 A(pts.begin(), pts.end(), FT(alpha), Alpha_shape_2::GENERAL);
+  std::cout << "Optimal alpha: " << *A.find_optimal_alpha(1) << std::endl;
+
+  for (auto it = A.alpha_shape_vertices_begin(); it != A.alpha_shape_vertices_end(); it++) {
+    auto p = (*it)->point();
+    edge_points.push_back({ float(p.x()), float(p.y()), min_z });
+  }
+
+  for (auto it = A.alpha_shape_edges_begin(); it != A.alpha_shape_edges_end(); it++) {
+    auto p1 = it->first->vertex(A.cw(it->second))->point();
+    auto p2 = it->first->vertex(A.ccw(it->second))->point();
+
+    alpha_edges.push_back({
+      {float(p1.x()), float(p1.y()), min_z},
+      {float(p2.x()), float(p2.y()), min_z}
+      });
+  }
+
+  // flood filling 
+  auto grower = AlphaShapeRegionGrower(A);
+  grower.grow();
+
+  for (auto fh = A.finite_faces_begin(); fh != A.finite_faces_end(); ++fh) {
+    arr3f p0 = { float(fh->vertex(0)->point().x()), float(fh->vertex(0)->point().y()), min_z };
+    arr3f p1 = { float(fh->vertex(1)->point().x()), float(fh->vertex(1)->point().y()), min_z };
+    arr3f p2 = { float(fh->vertex(2)->point().x()), float(fh->vertex(2)->point().y()), min_z };
+    alpha_triangles.push_back({ p0,p1,p2 });
+    segment_ids.push_back(grower.face_map[fh]);
+    segment_ids.push_back(grower.face_map[fh]);
+    segment_ids.push_back(grower.face_map[fh]);
+  }
+
+  int count = 0;
+
+  for (auto& kv : grower.region_map) {
+
+    auto region_label = kv.first;
+    auto v_start = kv.second;
+    boundary_points.push_back({
+      float(v_start->point().x()),
+      float(v_start->point().y()),
+      float(min_z) });
+
+    // find edges of outer boundary in order
+    LinearRing ring;
+    ring.push_back({ float(v_start->point().x()), float(v_start->point().y()), min_z });
+    // secondly, walk along the entire boundary starting from v_start
+    Vertex_handle v_next, v_prev = v_start, v_cur = v_start;
+
+    size_t v_cntr = 0;
+
+
+    do {
+      Edge_circulator ec(A.incident_edges(v_cur)), done(ec);
+      do {
+        // find the vertex on the other side of the incident edge ec
+        auto v = ec->first->vertex(A.cw(ec->second));
+        if (v_cur == v) v = ec->first->vertex(A.ccw(ec->second));
+        // find labels of two adjacent faces
+        auto label1 = grower.face_map[ec->first];
+        auto label2 = grower.face_map[ec->first->neighbor(ec->second)];
+        // check if the edge is on the boundary of the region and if we are not going backwards
+        bool exterior = label1 == -1 || label2 == -1;
+        bool region = label1 == region_label || label2 == region_label;
+        if ((exterior && region) && (v != v_prev)) {
+          v_next = v;
+          ring.push_back({ float(v_next->point().x()), float(v_next->point().y()), min_z });
+          break;
+        }
+      } while (++ec != done);
+      v_prev = v_cur;
+      v_cur = v_next;
+
+    } while (v_next != v_start);
+    //simplify the ring
+
+    if (sim_on == true)
+    {
+      std::cout << "count: " << count << "  single ring size:" << ring.size() << std::endl;
+      if (ring.size() > 10) {
+
+        float threshold_stop_cost = 0.5;
+        auto sim_ring = simplify_footprint(ring, threshold_stop_cost);
+        // finally, store the ring             
+        alpha_rings.push_back(sim_ring);
+
+      }
+      else
+      {
+        alpha_rings.push_back(ring);
+      }
+      count++;
+    }
+    else
+    {
+      alpha_rings.push_back(ring);
+    }
+  }
+  if (write_2_file_on == true)
+  {
+    std::string filepath = "c:\\users\\tengw\\documents\\git\\3dfier\\building_xyz\\WKTPolygons.txt";
+    std::ofstream outfile(filepath, std::fstream::out | std::fstream::trunc);
+    outfile << "id|wkt" << std::endl;
+
+    for (int i = 0; i < alpha_rings.size(); i++)
+    {
+      std::string line = std::to_string(i) + "|POLYGON((";
+      // each ring
+      for (int j = 0; j < alpha_rings[i].size(); j++)
+      {
+        if (j != alpha_rings[i].size() - 1)
+          line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset)[0]) + ' ' + std::to_string(alpha_rings[i][j][1] + (*manager.data_offset)[1]) + ',';
+        else
+        {
+          //line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset)[0]) + ' '+ std::to_string(alpha_rings[i][j][1] + (*manager.data_offset)[1]);
+          line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset)[0]) + ' ' + std::to_string(alpha_rings[i][j][1] + (*manager.data_offset)[1]) + ',' + std::to_string(alpha_rings[i][0][0] + (*manager.data_offset)[0]) + ' ' + std::to_string(alpha_rings[i][0][1] + (*manager.data_offset)[1]);
+        }
+      }
+      line = line + "))";
+      //std::cout << "line:" << line << std::endl;
+      outfile << line << std::endl;
+    }
+    outfile.close();
+  }
+
+  std::cout << "size of the rings:" << alpha_rings.size() << std::endl;
+  output("boundary_rings").set(alpha_rings);
+  std::cout << "CGAL AlphaShape done!" << std::endl;
+}
 
 } // namespace geoflow::nodes::cgal

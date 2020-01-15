@@ -3,6 +3,17 @@
 #include <geoflow/geoflow.hpp>
 #include "tinsimp.hpp"
 
+
+// Alpha Shape
+
+#include <CGAL/Alpha_shape_2.h>
+#include <CGAL/Alpha_shape_vertex_base_2.h>
+#include <CGAL/Alpha_shape_face_base_2.h>
+#include <CGAL/Delaunay_triangulation_2.h>
+
+// Simplification
+#include <CGAL/Polyline_simplification_2/simplify.h>
+
 namespace geoflow::nodes::cgal
 {
 
@@ -401,5 +412,70 @@ public:
   }
   void process();
 };
+class CGALAlphaShapeR :public Node
+{
+public:
+  using Node::Node;
+  float alpha_value;
+  bool sim_on = true;
+  bool write_2_file_on = false;
+  void init()
+  {
+    add_input("points", typeid(PointCollection));
+    add_output("boundary_points", typeid(PointCollection));
+    add_output("ground_points", typeid(PointCollection));
+    add_output("boundary_seg", typeid(SegmentCollection));
+    add_output("boundary_rings", typeid(LinearRingCollection));
+    add_param("sim_on", ParamBool(sim_on, "turn on simplification"));
+    add_param("alpha_value", ParamFloat(alpha_value, "alpha_value"));
+    add_param("write to file", ParamBool(write_2_file_on, "Write result to file"));
 
+  }
+  bool if_checkbox = true;
+
+  void process();
+
+  LinearRing simplify_footprint(const LinearRing& polygon, float& threshold_stop_cost) {
+    namespace PS = CGAL::Polyline_simplification_2;
+    typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+    typedef K::Point_2 Point_2;
+    typedef CGAL::Polygon_2<K>                   Polygon_2;
+    typedef PS::Stop_below_count_ratio_threshold Stop_count_ratio;
+    typedef PS::Stop_above_cost_threshold        Stop_cost;
+    typedef PS::Squared_distance_cost            Cost;
+
+    if (polygon.size() > 2) {
+      Polygon_2 cgal_polygon;
+      Cost cost;
+
+      for (auto& p : polygon) {
+        cgal_polygon.push_back(Point_2(p[0], p[1]));
+      }
+      // cgal_polygon.erase(cgal_polygon.vertices_end()-1); // remove repeated point from the boost polygon
+
+      // polygon = PS::simplify(polygon, cost, Stop_count_ratio(0.5));
+
+      cgal_polygon = PS::simplify(cgal_polygon, cost, Stop_cost(threshold_stop_cost));
+
+      LinearRing footprint_vec3f;
+      for (auto v = cgal_polygon.vertices_begin(); v != cgal_polygon.vertices_end(); v++) {
+        footprint_vec3f.push_back({ float(v->x()),float(v->y()),0 });
+      }
+
+      // HACK: CGAL does not seem to remove the first point of the input polygon in any case, so we need to check ourselves
+      auto p_0 = *(cgal_polygon.vertices_begin());
+      auto p_1 = *(cgal_polygon.vertices_begin() + 1);
+      auto p_end = *(cgal_polygon.vertices_end() - 1);
+      // check the distance between the first vertex and the line between its 2 neighbours
+      if (CGAL::squared_distance(Point_2(p_0), K::Segment_2(p_end, p_1)) < threshold_stop_cost) {
+        footprint_vec3f.erase(footprint_vec3f.begin());
+      }
+
+      return footprint_vec3f;
+    }
+    else
+      return polygon;
+  }
+
+};
 } // namespace geoflow::nodes::cgal
