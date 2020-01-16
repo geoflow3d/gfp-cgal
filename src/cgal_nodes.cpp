@@ -1431,7 +1431,7 @@ void CGALAlphaShapeR::process()
       std::cout << "count: " << count << "  single ring size:" << ring.size() << std::endl;
       if (ring.size() > 10) {
 
-        float threshold_stop_cost = 0.5;
+        //float threshold_stop_cost = 0.5;
         auto sim_ring = simplify_footprint(ring, threshold_stop_cost);
         // finally, store the ring             
         alpha_rings.push_back(sim_ring);

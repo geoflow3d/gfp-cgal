@@ -417,6 +417,7 @@ class CGALAlphaShapeR :public Node
 public:
   using Node::Node;
   float alpha_value;
+  float threshold_stop_cost =0.5;
   bool sim_on = true;
   bool write_2_file_on = false;
   void init()
@@ -427,6 +428,7 @@ public:
     add_output("boundary_seg", typeid(SegmentCollection));
     add_output("boundary_rings", typeid(LinearRingCollection));
     add_param("sim_on", ParamBool(sim_on, "turn on simplification"));
+    add_param("sim_value", ParamFloat(threshold_stop_cost, "simplification value"));
     add_param("alpha_value", ParamFloat(alpha_value, "alpha_value"));
     add_param("write to file", ParamBool(write_2_file_on, "Write result to file"));
 
