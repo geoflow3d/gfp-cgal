@@ -51,9 +51,9 @@ public:
     add_output("distances2", typeid(vec1f));
     add_output("diff", typeid(vec1f));
 
-    add_param("las_filpath", ParamPath(las_filepath, "LAS path"));
-    add_param("log_filpath", ParamPath(log_filepath, "LOG path"));
-    add_param("thin_nth", ParamBoundedInt(thin_nth, 0, 100, "Thin factor"));
+    add_param(ParamPath(las_filepath, "las_filpath", "LAS path"));
+    add_param(ParamPath(log_filepath, "log_filpath", "LOG path"));
+    add_param(ParamBoundedInt(thin_nth, 0, 100, "thin_nth", "Thin factor"));
   }
   void process();
 };
@@ -74,9 +74,9 @@ public:
     add_output("distance_min", typeid(float));
     add_output("distance_max", typeid(float));
 
-    add_param("filepath", ParamPath(filepath, "Filepath"));
-    add_param("thin_nth", ParamBoundedInt(thin_nth, 0, 100, "Thin factor"));
-    add_param("overwritez", ParamBool(overwritez, "Overwrite Z"));
+    add_param(ParamPath(filepath, "filepath", "Filepath"));
+    add_param(ParamBoundedInt(thin_nth, 0, 100, "thin_nth", "Thin factor"));
+    add_param(ParamBool(overwritez, "overwritez", "Overwrite Z"));
   }
   void process();
 };
@@ -107,7 +107,7 @@ public:
     add_input("geometries", {typeid(LineStringCollection)});
     add_output("dense_linestrings", typeid(LineStringCollection));
 
-    add_param("interval", ParamBoundedInt(interval, 0, 100, "Interval"));
+    add_param(ParamBoundedInt(interval, 0, 100, "interval", "Interval"));
   }
   void process();
 };
@@ -130,21 +130,21 @@ public:
     // add_output("count", typeid(vec1ui));
     // add_output("error", typeid(vec1f));
 
-    add_param("thres_error", ParamFloat(thres_error, "Error threshold"));
-    add_param("densify_interval", ParamFloat(densify_interval, "Densify interval"));
-    add_param("create_triangles", ParamBool(create_triangles, "Create triangles"));
+    add_param(ParamFloat(thres_error, "thres_error", "Error threshold"));
+    add_param(ParamFloat(densify_interval, "densify_interval", "Densify interval"));
+    add_param(ParamBool(create_triangles, "create_triangles", "Create triangles"));
   }
-  void before_gui()
-  {
-    bool is_linestring = input("geometries").is_connected_type(typeid(LineStringCollection));
-    auto param = std::get<ParamFloat>(parameters.at("densify_interval"));
-    param.set_visible(is_linestring);
-  }
-  void on_change_parameter(std::string name, ParameterVariant &param)
-  {
-    if (name == "thres_error")
-      manager.run(*this);
-  }
+  // void before_gui()
+  // {
+  //   bool is_linestring = input("geometries").is_connected_type(typeid(LineStringCollection));
+  //   auto param = std::get<ParamFloat>(parameters.at("densify_interval"));
+  //   param.set_visible(is_linestring);
+  // }
+  // void on_change_parameter(std::string name, ParameterVariant &param)
+  // {
+  //   if (name == "thres_error")
+  //     manager.run(*this);
+  // }
   void process();
 };
 
@@ -162,10 +162,10 @@ public:
     add_output("triangles", typeid(TriangleCollection));
     add_output("cgal_cdt", typeid(CDT));
 
-    add_param("filepath", ParamPath(filepath, "Filepath"));
-    add_param("thin_nth", ParamBoundedInt(thin_nth, 0, 100, "Thin factor"));
-    add_param("thres_error", ParamBoundedFloat(thres_error, 0, 100, "Error threshold"));
-    add_param("create_triangles", ParamBool(create_triangles, "Create triangles"));
+    add_param(ParamPath(filepath, "filepath", "Filepath"));
+    add_param(ParamBoundedInt(thin_nth, 0, 100, "thin_nth", "Thin factor"));
+    add_param(ParamBoundedFloat(thres_error, 0, 100, "thres_error", "Error threshold"));
+    add_param(ParamBool(create_triangles, "create_triangles", "Create triangles"));
   }
   void process();
 };
@@ -181,13 +181,13 @@ public:
     add_input("lines", typeid(LineStringCollection));
     add_output("lines", typeid(LineStringCollection));
 
-    add_param("area_threshold", ParamFloat(area_threshold, "Stop cost"));
+    add_param(ParamFloat(area_threshold, "area_threshold", "Stop cost"));
   }
-  void on_parameter_change(std::string name, ParameterVariant &param)
-  {
-    if (name == "area_threshold")
-      manager.run(*this);
-  }
+  // void on_parameter_change(std::string name, ParameterVariant &param)
+  // {
+  //   if (name == "area_threshold")
+  //     manager.run(*this);
+  // }
   void process();
 };
 
@@ -202,13 +202,13 @@ public:
     add_input("lines", typeid(LineStringCollection));
     add_output("lines", typeid(LineStringCollection));
 
-    add_param("threshold_stop_cost", ParamFloat(threshold_stop_cost, "Stop cost"));
+    add_param(ParamFloat(threshold_stop_cost, "threshold_stop_cost", "Stop cost"));
   }
-  void on_parameter_change(std::string name, ParameterVariant &param)
-  {
-    if (name == "threshold_stop_cost")
-      manager.run(*this);
-  }
+  // void on_parameter_change(std::string name, ParameterVariant &param)
+  // {
+  //   if (name == "threshold_stop_cost")
+  //     manager.run(*this);
+  // }
   void process();
 };
 
@@ -223,13 +223,13 @@ public:
     add_input("lines", typeid(LineStringCollection));
     add_output("lines", typeid(LineStringCollection));
 
-    add_param("threshold_stop_cost", ParamFloat(threshold_stop_cost, "Stop cost"));
+    add_param(ParamFloat(threshold_stop_cost, "threshold_stop_cost", "Stop cost"));
   }
-  void on_parameter_change(std::string name, ParameterVariant &param)
-  {
-    if (name == "threshold_stop_cost")
-      manager.run(*this);
-  }
+  // void on_parameter_change(std::string name, ParameterVariant &param)
+  // {
+  //   if (name == "threshold_stop_cost")
+  //     manager.run(*this);
+  // }
   void process();
 };
 
@@ -244,13 +244,13 @@ public:
     add_input("polygons", typeid(LinearRingCollection));
     add_output("polygons_simp", typeid(LinearRingCollection));
 
-    add_param("threshold_stop_cost", ParamFloat(threshold_stop_cost, "Stop cost"));
+    add_param(ParamFloat(threshold_stop_cost, "threshold_stop_cost", "Stop cost"));
   }
-  void on_parameter_change(std::string name, ParameterVariant &param)
-  {
-    if (name == "threshold_stop_cost")
-      manager.run(*this);
-  }
+  // void on_parameter_change(std::string name, ParameterVariant &param)
+  // {
+  //   if (name == "threshold_stop_cost")
+  //     manager.run(*this);
+  // }
   void process();
 };
 
@@ -268,8 +268,8 @@ public:
     add_input("points", typeid(PointCollection)); //TT_point_collection_list
     add_input("labels", typeid(vec1i));
 
-    add_param("filepath", ParamPath(filepath, "Filepath"));
-    add_param("write_binary", ParamBool(write_binary, "Binary output"));
+    add_param(ParamPath(filepath, "filepath", "Filepath"));
+    add_param(ParamBool(write_binary, "write_binary", "Binary output"));
   }
   void process();
 };
@@ -285,7 +285,7 @@ public:
     add_output("points", typeid(PointCollection)); //TT_point_collection_list
     add_output("normals", typeid(vec3f));
 
-    add_param("filepath", ParamPath(filepath, "Filepath"));
+    add_param(ParamPath(filepath, "filepath", "Filepath"));
   }
   void process();
 };
@@ -305,8 +305,8 @@ public:
     add_output("lines", typeid(LineStringCollection));
     add_output("attributes", typeid(vec1i));
 
-    add_param("interval", ParamBoundedFloat(interval, 1, 100, "Interval"));
-    add_param("exclude", ParamFloatRange(exclude_interval, "Exclude values"));
+    add_param(ParamBoundedFloat(interval, 1, 100, "interval", "Interval"));
+    add_param(ParamFloatRange(exclude_interval, "exclude", "Exclude values"));
   }
   void process();
 };
@@ -336,8 +336,8 @@ public:
     add_input("lines", typeid(LineStringCollection));
     add_output("lines", typeid(LineStringCollection));
 
-    add_param("filepath", ParamPath(filepath, "Filepath"));
-    add_param("thin_nth", ParamBoundedInt(thin_nth, 0, 100, "Thin factor"));
+    add_param(ParamPath(filepath, "filepath", "Filepath"));
+    add_param(ParamBoundedInt(thin_nth, 0, 100, "thin_nth", "Thin factor"));
   }
   void process();
 };
@@ -355,8 +355,8 @@ public:
     add_input("lines", typeid(LineStringCollection));
     add_output("lines", typeid(LineStringCollection));
 
-    add_param("add_bbox", ParamBool(add_bbox, "Add bounding box to lines"));
-    add_param("densify_interval", ParamBoundedFloat(densify_interval, 0, 100, "Line densify"));
+    add_param(ParamBool(add_bbox, "add_bbox", "Add bounding box to lines"));
+    add_param(ParamBoundedFloat(densify_interval, 0, 100, "densify_interval", "Line densify"));
   }
   void process();
 };
@@ -372,7 +372,7 @@ public:
     add_input("polygons", typeid(LinearRingCollection));
     add_output("polygons_simp", typeid(LinearRingCollection));
 
-    add_param("threshold", ParamBoundedFloat(threshold, 0, 100, "Threshold"));
+    add_param(ParamBoundedFloat(threshold, 0, 100, "threshold", "Threshold"));
   }
   void process();
 };
