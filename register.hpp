@@ -25,4 +25,7 @@ void register_nodes(geoflow::NodeRegister &node_register)
   node_register.register_node<SimplifyLinesBufferNode>("SimplifyLinesBuffer");
   node_register.register_node<CDTAddConstraintNode>("CDTAddConstraint");
   node_register.register_node<CDT2TrianglesNode>("CDT2Triangles");
+  node_register.register_node<CGALAlphaShapeR>("CGALAlphaShape");
+  node_register.register_node<OverlapCheckNode>("OverlapCheckNode");
+  node_register.register_node<ConvertLinearCollection2LinearRing>("ConvertLinearCollection2LinearRing");
 }

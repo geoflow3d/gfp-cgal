@@ -46,6 +46,10 @@
 #include <CGAL/Orthogonal_k_neighbor_search.h>
 #include <CGAL/Search_traits_2.h>
 
+#include <CGAL/Boolean_set_operations_2.h>
+
+#undef NOMINMAX
+
 namespace geoflow::nodes::cgal
 {
 typedef tinsimp::K K;
@@ -1198,5 +1202,425 @@ void CDT2TrianglesNode::process()
 
   output("triangles").set(triangles);
 }
+//----------for CGAL ALphaShape boundary ---------------Teng/
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+typedef K::FT                                                FT;
+typedef K::Point_2 Point_2;
+typedef std::vector<Point_2> Points;
+typedef K::Segment_2                                         Segment_2;
+typedef CGAL::Alpha_shape_vertex_base_2<K>                   Vb;
+typedef CGAL::Alpha_shape_face_base_2<K>                     Fb;
+typedef CGAL::Triangulation_data_structure_2<Vb, Fb>          Tds;
+typedef CGAL::Delaunay_triangulation_2<K, Tds>                Triangulation_2;
+typedef CGAL::Alpha_shape_2<Triangulation_2>                 Alpha_shape_2;
+typedef Alpha_shape_2::Alpha_shape_edges_iterator            Alpha_shape_edges_iterator;
 
+//---------Ravi's method ------------------------//
+//typedef CGAL::Triangulation_data_structure_2<Vb, Fb>          Tds;
+//typedef CGAL::Delaunay_triangulation_2<Gt, Tds>               Triangulation_2;
+//typedef CGAL::Alpha_shape_2<Triangulation_2>                 Alpha_shape_2;
+typedef Alpha_shape_2::Vertex_handle                        Vertex_handle;
+typedef Alpha_shape_2::Edge                                 Edge;
+typedef Alpha_shape_2::Face_handle                          Face_handle;
+typedef Alpha_shape_2::Vertex_circulator                    Vertex_circulator;
+typedef Alpha_shape_2::Edge_circulator                      Edge_circulator;
+typedef Triangulation_2::Point                                  TPoint;
+
+template <class OutputIterator>
+void alpha_edges(const Alpha_shape_2& A, OutputIterator out)
+{
+  Alpha_shape_edges_iterator it = A.alpha_shape_edges_begin(),
+    end = A.alpha_shape_edges_end();
+  for (; it != end; ++it)
+    *out++ = A.segment(*it);
+}
+template <class OutputIterator>
+bool file_input(OutputIterator out)
+{
+  std::ifstream is("./data/fin", std::ios::in);
+  if (is.fail())
+  {
+    std::cerr << "unable to open file for input" << std::endl;
+    return false;
+  }
+  int n;
+  is >> n;
+  std::cout << "Reading " << n << " points from file" << std::endl;
+  std::copy_n(std::istream_iterator<Point>(is), n, out);
+  return true;
+}
+
+class AlphaShapeRegionGrower {
+  Alpha_shape_2 &A;
+  enum Mode {
+    ALPHA, // stop at alpha boundary
+    EXTERIOR // stop at faces labels as exterior
+  };
+  int label_cnt; // label==-1 means exterior, -2 mean never visiter, 0+ means a regular region
+public:
+  std::unordered_map<Face_handle, int> face_map;
+  std::unordered_map<int, Vertex_handle> region_map; //label: (boundary vertex)
+  AlphaShapeRegionGrower(Alpha_shape_2& as) : A(as), label_cnt(0) {};
+
+  void grow() {
+    std::stack<Face_handle> seeds;
+    for (auto fh = A.all_faces_begin(); fh != A.all_faces_end(); ++fh) {
+      seeds.push(fh);
+      face_map[fh] = -2;
+    }
+    auto inf_face = A.infinite_face();
+    face_map[inf_face] = -1;
+    grow_region(inf_face, ALPHA); // this sets label of exterior faces to -1
+    while (!seeds.empty()) {
+      auto fh = seeds.top(); seeds.pop();
+      if (face_map[fh] == -2) {
+        face_map[fh] = label_cnt;
+        grow_region(fh, EXTERIOR);
+        ++label_cnt;
+      }
+    }
+  }
+  void grow_region(Face_handle face_handle, Mode mode) {
+    std::stack<Face_handle> candidates;
+    candidates.push(face_handle);
+
+    while (candidates.size() > 0) {
+      auto fh = candidates.top(); candidates.pop();
+      // check the 3 neighbors of this face
+      for (int i = 0; i < 3; ++i) {
+        auto e = std::make_pair(fh, i);
+        auto neighbor = fh->neighbor(i);
+
+        if (mode == ALPHA) {
+          // add neighbor if it is not on the ohter side of alpha boundary
+          // check if this neighbor hasn't been visited before
+          if (face_map[neighbor] == -2) {
+            auto edge_class = A.classify(e);
+            if (!(edge_class == Alpha_shape_2::REGULAR || edge_class == Alpha_shape_2::SINGULAR)) {
+              face_map[neighbor] = -1;
+              candidates.push(neighbor);
+            }
+          }
+        }
+        else if (mode == EXTERIOR) {
+          // check if this neighbor hasn't been visited before and is not exterior
+          auto edge_class = A.classify(e);
+          // if(face_map[neighbor] == -2 &&(edge_class!= Alpha_shape_2::REGULAR))
+          if (face_map[neighbor] == -2) {
+            face_map[neighbor] = label_cnt;
+            candidates.push(neighbor);
+            // if it is exterior, we store this boundary edge
+          }
+          else if (face_map[neighbor] == -1) {
+            if (region_map.find(label_cnt) == region_map.end()) { //check if label exists in region map
+              region_map[label_cnt] = fh->vertex(A.cw(i));
+            }
+          }
+        }
+
+      }
+    }
+  }
+};
+
+void CGALAlphaShapeR::process()
+{
+  std::cout << "CGAL AlphaShape starts..." << std::endl;
+  auto pc = input("points").get<PointCollection>();
+  float alpha = alpha_value;
+
+  //---------output -------------//
+
+  PointCollection ground_PC;
+
+  PointCollection edge_points, boundary_points;
+  LineStringCollection alpha_edges;
+  LinearRingCollection alpha_rings;
+  TriangleCollection alpha_triangles;
+  vec1i segment_ids, plane_idx;
+  auto& id_terminal = vector_output("id");
+
+  float min_z = 9999999;
+  for (int i = 0; i < pc.size(); i++)
+  {
+    if (pc[i][2] < min_z)
+    {
+      min_z = pc[i][2];
+    }
+  }
+
+  Points pts, result; // for alpha
+  for (int i = 0; i < pc.size(); i++)
+  {
+    ground_PC.push_back({ pc[i][0],pc[i][1],min_z });
+    pts.push_back(Point_2(pc[i][0], pc[i][1]));
+  }
+  Alpha_shape_2 A(pts.begin(), pts.end(), FT(alpha), Alpha_shape_2::GENERAL);
+  std::cout << "Optimal alpha: " << *A.find_optimal_alpha(1) << std::endl;
+
+  for (auto it = A.alpha_shape_vertices_begin(); it != A.alpha_shape_vertices_end(); it++) {
+    auto p = (*it)->point();
+    edge_points.push_back({ float(p.x()), float(p.y()), min_z });
+  }
+
+  for (auto it = A.alpha_shape_edges_begin(); it != A.alpha_shape_edges_end(); it++) {
+    auto p1 = it->first->vertex(A.cw(it->second))->point();
+    auto p2 = it->first->vertex(A.ccw(it->second))->point();
+
+    alpha_edges.push_back({
+      {float(p1.x()), float(p1.y()), min_z},
+      {float(p2.x()), float(p2.y()), min_z}
+      });
+  }
+
+  // flood filling 
+  auto grower = AlphaShapeRegionGrower(A);
+  grower.grow();
+
+  for (auto fh = A.finite_faces_begin(); fh != A.finite_faces_end(); ++fh) {
+    arr3f p0 = { float(fh->vertex(0)->point().x()), float(fh->vertex(0)->point().y()), min_z };
+    arr3f p1 = { float(fh->vertex(1)->point().x()), float(fh->vertex(1)->point().y()), min_z };
+    arr3f p2 = { float(fh->vertex(2)->point().x()), float(fh->vertex(2)->point().y()), min_z };
+    alpha_triangles.push_back({ p0,p1,p2 });
+    segment_ids.push_back(grower.face_map[fh]);
+    segment_ids.push_back(grower.face_map[fh]);
+    segment_ids.push_back(grower.face_map[fh]);
+  }
+
+  int count = 0;
+
+  for (auto& kv : grower.region_map) {
+
+    auto region_label = kv.first;
+    auto v_start = kv.second;
+    boundary_points.push_back({
+      float(v_start->point().x()),
+      float(v_start->point().y()),
+      float(min_z) });
+
+    // find edges of outer boundary in order
+    LinearRing ring;
+    ring.push_back({ float(v_start->point().x()), float(v_start->point().y()), min_z });
+    // secondly, walk along the entire boundary starting from v_start
+    Vertex_handle v_next, v_prev = v_start, v_cur = v_start;
+
+    size_t v_cntr = 0;
+
+
+    do {
+      Edge_circulator ec(A.incident_edges(v_cur)), done(ec);
+      do {
+        // find the vertex on the other side of the incident edge ec
+        auto v = ec->first->vertex(A.cw(ec->second));
+        if (v_cur == v) v = ec->first->vertex(A.ccw(ec->second));
+        // find labels of two adjacent faces
+        auto label1 = grower.face_map[ec->first];
+        auto label2 = grower.face_map[ec->first->neighbor(ec->second)];
+        // check if the edge is on the boundary of the region and if we are not going backwards
+        bool exterior = label1 == -1 || label2 == -1;
+        bool region = label1 == region_label || label2 == region_label;
+        if ((exterior && region) && (v != v_prev)) {
+          v_next = v;
+          ring.push_back({ float(v_next->point().x()), float(v_next->point().y()), min_z });
+          break;
+        }
+      } while (++ec != done);
+      v_prev = v_cur;
+      v_cur = v_next;
+
+    } while (v_next != v_start);
+    //simplify the ring
+
+    if (sim_on == true)
+    {
+      std::cout << "count: " << count << "  single ring size:" << ring.size() << std::endl;
+      if (ring.size() > 10) {
+
+        float threshold_stop_cost = 0.5;
+        auto sim_ring = simplify_footprint(ring, threshold_stop_cost);
+        // finally, store the ring             
+        alpha_rings.push_back(sim_ring);
+
+      }
+      else
+      {
+        alpha_rings.push_back(ring);
+      }
+      count++;
+    }
+    else
+    {
+      alpha_rings.push_back(ring);
+
+
+    }
+  }
+  if (write_2_file_on == true)
+  {
+    std::string filepath = "c:\\users\\tengw\\documents\\git\\3dfier\\building_xyz\\WKTPolygons.txt";
+    std::ofstream outfile(filepath, std::fstream::out | std::fstream::trunc);
+    outfile << "id|wkt" << std::endl;
+
+    for (int i = 0; i < alpha_rings.size(); i++)
+    {
+      std::string line = std::to_string(i) + "|POLYGON((";
+      // each ring
+      for (int j = 0; j < alpha_rings[i].size(); j++)
+      {
+        if (j != alpha_rings[i].size() - 1)
+          line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset)[0]) + ' ' + std::to_string(alpha_rings[i][j][1] + (*manager.data_offset)[1]) + ',';
+        else
+        {
+          //line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset)[0]) + ' '+ std::to_string(alpha_rings[i][j][1] + (*manager.data_offset)[1]);
+          line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset)[0]) + ' ' + std::to_string(alpha_rings[i][j][1] + (*manager.data_offset)[1]) + ',' + std::to_string(alpha_rings[i][0][0] + (*manager.data_offset)[0]) + ' ' + std::to_string(alpha_rings[i][0][1] + (*manager.data_offset)[1]);
+        }
+      }
+      line = line + "))";
+      //std::cout << "line:" << line << std::endl;
+      outfile << line << std::endl;
+    }
+    outfile.close();
+  }
+
+  for (int s = 0; s < alpha_rings.size(); s++) {
+    id_terminal.push_back(s);
+  }
+
+  std::cout << "size of the rings:" << alpha_rings.size() << std::endl;
+  output("boundary_rings").set(alpha_rings);
+  std::cout << "CGAL AlphaShape done!" << std::endl;
+}
+
+float GetBagOverlap(LinearRing& polygon, LinearRingCollection alpha_polygons)
+{
+  typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+  typedef CGAL::Polygon_2<K>                          Polygon_2;
+  typedef CGAL::Polygon_with_holes_2<K>    Polygon_with_holes_2;
+  typedef K::Point_2                                    Point_2;
+
+
+  float over_pcent = 0.0;
+  float over_area = 0.0;
+  Polygon_2 cgal_BAG_polygon;
+  std::cout << "BAG_POLY" << std::endl;
+  for (auto& p : polygon) {
+    cgal_BAG_polygon.push_back(Point_2(p[0], p[1]));
+    //std::cout << p[0] << "," << p[1] << std::endl;
+  }
+  double area = abs(cgal_BAG_polygon.area());
+  std::cout << "BAG Area:" << area << std::endl;
+  if (area < 100) // BAG too small then don't care
+  {
+    return 1.0;
+  }
+
+
+  std::vector<Polygon_2> alpha_poly_list;
+
+
+  for (auto alpha_poly : alpha_polygons) {
+
+    Polygon_2 cgal_alpha_poly;
+    //std::cout << "alpha poly" << std::endl;
+    for (int i = 0; i < alpha_poly.size() - 1; i++) {
+      cgal_alpha_poly.push_back(Point_2(alpha_poly[i][0], alpha_poly[i][1]));
+      //std::cout << pt[0] << "," << pt[1] << std::endl;
+    }
+    if (CGAL::do_intersect(cgal_alpha_poly, cgal_BAG_polygon)) {
+      std::list<Polygon_with_holes_2> polyI;
+      double totalArea = 0;
+      CGAL::intersection(cgal_alpha_poly, cgal_BAG_polygon, std::back_inserter(polyI));
+      typedef std::list<Polygon_with_holes_2>::iterator LIT;
+      for (LIT lit = polyI.begin(); lit != polyI.end(); lit++) {
+        totalArea += abs(lit->outer_boundary().area());
+      }
+      over_area += totalArea;
+    }
+  }
+  std::cout << "over_area" << over_area << std::endl;
+
+
+  over_pcent = over_area / area;
+
+
+  //std::cout << "over_pcent" << over_pcent << std::endl;
+  return over_pcent;
+}
+
+
+
+void OverlapCheckNode::process() {
+
+  // ----------------- input ---------------------//
+  std::cout << "Overlap checking starts!" << std::endl;
+  //auto bag_polygons= input("linear_rings").get<LinearRing>();
+  auto bag_polygons = vector_input("linear_rings");
+  auto alpha_polygons = input("boundary_rings").get<LinearRingCollection>();
+
+  // -------------- output --------------------//
+  vec1f overlap_penct_lst;
+  //vec1i bag_type;
+  //std::vector<char> bag_type;
+  auto& bag_type_terminal = vector_output("bag_type");
+
+
+  /*std::cout << "type:" <<typeid(bag_polygons[0]).name() << "one bag polygon size:"<< bag_polygons[0].size() << std::endl; //type:class std::array<float,3>one bag polygon:
+  for (auto pt : bag_polygons[0]) {
+    std::cout << typeid(pt).name()<< pt << std::endl;//float0
+  }*/
+
+
+  // -------------- process ----------------------//
+  for (size_t i = 0; i < bag_polygons.size(); ++i) {
+    //for (size_t i = 0; i < 1; ++i) {
+    auto& polygon = bag_polygons.get<LinearRing&>(i);
+    std::cout << typeid(polygon).name() << "size:" << polygon.size() << std::endl;
+    float overlap = GetBagOverlap(polygon, alpha_polygons);
+    overlap_penct_lst.push_back(overlap);
+  }
+  std::cout << "wirting to file" << std::endl;
+  std::string filepath = "c:\\users\\tengw\\documents\\git\\New_plugins\\overpcent.txt";
+  std::ofstream outfile(filepath, std::fstream::out | std::fstream::trunc);
+  for (auto f : overlap_penct_lst) {
+    outfile << f << std::endl;
+    if (f >= 0.95) {
+      //bag_type.push_back(3);
+      bag_type_terminal.push_back(3);
+    } // class 3 normal bag
+    else if (f < 0.25)
+    {
+      // bag_type.push_back(1);
+      bag_type_terminal.push_back(1);
+    } //class 1 underground
+    else {
+      //bag_type.push_back(2); 
+      bag_type_terminal.push_back(2);
+    } //class2 part underground
+
+  }
+  outfile.close();
+
+
+  std::cout << "CGAL OverlapCheckNode done!" << std::endl;
+
+}
+
+void ConvertLinearCollection2LinearRing::process() {
+
+  // ----------------- input ---------------------//
+  std::cout << "ConvertLinearCollection2LinearRing checking starts!" << std::endl;
+
+  auto polygons = input("boundary_rings").get<LinearRingCollection>();
+
+  auto& linear_rings_terminal = vector_output("linear_rings");
+
+
+  for (auto polygon : polygons) {
+    LinearRing new_polygon;
+    for (int i = 0; i < polygon.size() - 1; i++) {
+      new_polygon.push_back({ polygon[i][0], polygon[i][1], polygon[i][2] });
+    }
+    linear_rings_terminal.push_back(new_polygon);
+  }
+}
 } // namespace geoflow::nodes::cgal
