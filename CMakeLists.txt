@@ -18,7 +18,7 @@ geoflow_create_plugin(
   src/tinsimp.cpp
 )
 target_include_directories( gfp_cgal PRIVATE src ${glm_DIR}/.. ${LASLIB_INCLUDE_DIR})
-target_link_libraries( gfp_cgal
+target_link_libraries( gfp_cgal PRIVATE
   geoflow-core
   LASlib
   CGAL::CGAL CGAL::CGAL_Core
