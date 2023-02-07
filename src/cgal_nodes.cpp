@@ -241,7 +241,7 @@ void PointDistanceNode::process()
   vec1f distances;
   PointCollection points;
   size_t i = 0;
-  auto offset = manager.data_offset.value_or(std::array<double, 3>({0, 0, 0}));
+  auto offset = manager.data_offset().value_or(std::array<double, 3>({0, 0, 0}));
   while (lasreader->read_point())
   {
     if (lasreader->point.get_classification() == 2)
@@ -497,8 +497,8 @@ void TinSimpLASReaderNode::process()
   lasreader->set_filter(filter);
   points.reserve(lasreader->npoints);
 
-  manager.data_offset = {lasreader->get_min_x(), lasreader->get_min_y(), lasreader->get_min_z()};
-  auto offset = manager.data_offset.value();
+  manager.data_offset() = {lasreader->get_min_x(), lasreader->get_min_y(), lasreader->get_min_z()};
+  auto offset = manager.data_offset().value();
 
   size_t i = 0;
   float xmin = 99999;
@@ -739,7 +739,7 @@ void PLYWriterNode::process()
   pl_points.resize(points.size());
   for (size_t i = 0; i < points.size(); ++i)
   {
-    pl_points[i].get<0>() = Point(points[i][0] + (*manager.data_offset)[0], points[i][1] + (*manager.data_offset)[1], points[i][2] + (*manager.data_offset)[2]);
+    pl_points[i].get<0>() = Point(points[i][0] + (*manager.data_offset())[0], points[i][1] + (*manager.data_offset())[1], points[i][2] + (*manager.data_offset())[2]);
     pl_points[i].get<1>() = labels[i];
   }
 
@@ -1014,7 +1014,7 @@ void LineHeightNode::process()
 
   LineStringCollection lines_out;
   size_t i = 0;
-  auto offset = manager.data_offset.value_or(std::array<double, 3>({0, 0, 0}));
+  auto offset = manager.data_offset().value_or(std::array<double, 3>({0, 0, 0}));
   while (lasreader->read_point())
   {
     if (lasreader->point.get_classification() == 2)
@@ -1171,9 +1171,9 @@ void CDTAddConstraintNode::process()
     for (auto &p : line)
     {
       cgal_points.push_back(Point(
-          p[0] + (*manager.data_offset)[0],
-          p[1] + (*manager.data_offset)[1],
-          p[2] + (*manager.data_offset)[2]));
+          p[0] + (*manager.data_offset())[0],
+          p[1] + (*manager.data_offset())[1],
+          p[2] + (*manager.data_offset())[2]));
     }
     cdt.insert_constraint(cgal_points.begin(), cgal_points.end());
   }
@@ -1468,11 +1468,11 @@ void CGALAlphaShapeR::process()
       for (int j = 0; j < alpha_rings[i].size(); j++)
       {
         if (j != alpha_rings[i].size() - 1)
-          line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset)[0]) + ' ' + std::to_string(alpha_rings[i][j][1] + (*manager.data_offset)[1]) + ',';
+          line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset())[0]) + ' ' + std::to_string(alpha_rings[i][j][1] + (*manager.data_offset())[1]) + ',';
         else
         {
-          //line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset)[0]) + ' '+ std::to_string(alpha_rings[i][j][1] + (*manager.data_offset)[1]);
-          line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset)[0]) + ' ' + std::to_string(alpha_rings[i][j][1] + (*manager.data_offset)[1]) + ',' + std::to_string(alpha_rings[i][0][0] + (*manager.data_offset)[0]) + ' ' + std::to_string(alpha_rings[i][0][1] + (*manager.data_offset)[1]);
+          //line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset())[0]) + ' '+ std::to_string(alpha_rings[i][j][1] + (*manager.data_offset())[1]);
+          line = line + std::to_string(alpha_rings[i][j][0] + (*manager.data_offset())[0]) + ' ' + std::to_string(alpha_rings[i][j][1] + (*manager.data_offset())[1]) + ',' + std::to_string(alpha_rings[i][0][0] + (*manager.data_offset())[0]) + ' ' + std::to_string(alpha_rings[i][0][1] + (*manager.data_offset())[1]);
         }
       }
       line = line + "))";
